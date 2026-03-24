@@ -4,16 +4,26 @@
   "description": "Cron job to fetch, categorize, and store free proxies from GitHub sources",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js",
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
     "scrape": "node scrape.js",
-    "dashboard": "node server.js",
-    "dev": "node index.js & node server.js"
+    "cron": "node index.js"
   },
   "dependencies": {
     "axios": "^1.7.0",
     "dotenv": "^17.3.1",
-    "express": "^4.21.0",
     "mongodb": "^6.8.0",
-    "node-cron": "^3.0.3"
+    "next": "^15.3.0",
+    "node-cron": "^3.0.3",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "typescript": "^5"
   }
 }
