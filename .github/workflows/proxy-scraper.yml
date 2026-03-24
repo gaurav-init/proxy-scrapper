@@ -26,3 +26,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GH_PAT_TOKEN }}
           MONGO_URI: ${{ secrets.MONGO_URI }}
         run: node scrape.js
+
+      - name: Scan ports (SMTP + HTTP)
+        env:
+          MONGO_URI: ${{ secrets.MONGO_URI }}
+        run: node port-scan.js

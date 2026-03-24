@@ -11,6 +11,8 @@ interface Proxy {
   source: string;
   lastCommit: string | null;
   scrapedAt: string;
+  smtpPorts?: number[];
+  httpPorts?: number[];
 }
 
 interface Stats {
@@ -18,6 +20,10 @@ interface Stats {
   byType: Record<string, number>;
   byStatus: Record<string, number>;
   activeByType: Record<string, number>;
+  ports?: {
+    smtp: { 25: number; 587: number; any: number };
+    http: { 80: number; 443: number; any: number };
+  };
 }
 
 function timeAgo(dateStr: string | null) {
@@ -27,8 +33,7 @@ function timeAgo(dateStr: string | null) {
   if (mins < 60) return mins + "m ago";
   const hrs = Math.floor(mins / 60);
   if (hrs < 24) return hrs + "h ago";
-  const days = Math.floor(hrs / 24);
-  return days + "d ago";
+  return Math.floor(hrs / 24) + "d ago";
 }
 
 export default function Dashboard() {
@@ -38,6 +43,7 @@ export default function Dashboard() {
   const [pages, setPages] = useState(0);
   const [currentType, setCurrentType] = useState("");
   const [currentStatus, setCurrentStatus] = useState("active");
+  const [currentPort, setCurrentPort] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -46,8 +52,7 @@ export default function Dashboard() {
   const loadStats = useCallback(async () => {
     try {
       const res = await fetch("/api/stats");
-      const data = await res.json();
-      setStats(data);
+      setStats(await res.json());
     } catch (e) {
       console.error("Failed to load stats:", e);
     }
@@ -58,6 +63,7 @@ export default function Dashboard() {
     const params = new URLSearchParams({ page: String(currentPage), limit: String(LIMIT) });
     if (currentType) params.set("type", currentType);
     if (currentStatus) params.set("status", currentStatus);
+    if (currentPort) params.set("port", currentPort);
 
     try {
       const res = await fetch("/api/proxies?" + params);
@@ -70,34 +76,18 @@ export default function Dashboard() {
     } finally {
       setLoading(false);
     }
-  }, [currentPage, currentType, currentStatus]);
+  }, [currentPage, currentType, currentStatus, currentPort]);
 
+  useEffect(() => { loadStats(); }, [loadStats]);
+  useEffect(() => { loadProxies(); }, [loadProxies]);
   useEffect(() => {
-    loadStats();
-  }, [loadStats]);
-
-  useEffect(() => {
-    loadProxies();
-  }, [loadProxies]);
-
-  // Auto-refresh every 5 minutes
-  useEffect(() => {
-    const interval = setInterval(() => {
-      loadStats();
-      loadProxies();
-    }, 300000);
+    const interval = setInterval(() => { loadStats(); loadProxies(); }, 300000);
     return () => clearInterval(interval);
   }, [loadStats, loadProxies]);
 
-  function handleType(type: string) {
-    setCurrentType(type);
-    setCurrentPage(1);
-  }
-
-  function handleStatus(status: string) {
-    setCurrentStatus(status);
-    setCurrentPage(1);
-  }
+  function handleType(v: string) { setCurrentType(v); setCurrentPage(1); }
+  function handleStatus(v: string) { setCurrentStatus(v); setCurrentPage(1); }
+  function handlePort(v: string) { setCurrentPort(v); setCurrentPage(1); }
 
   function copyProxy(ip: string, port: number, id: string) {
     navigator.clipboard.writeText(ip + ":" + port);
@@ -117,6 +107,16 @@ export default function Dashboard() {
     { label: "Active", value: "active", cls: "active-btn" },
     { label: "Inactive", value: "inactive", cls: "inactive-btn" },
     { label: "All", value: "", cls: "all-btn" },
+  ];
+
+  const portFilters = [
+    { label: "All Ports", value: "" },
+    { label: "SMTP (any)", value: "smtp" },
+    { label: "Port 25", value: "25" },
+    { label: "Port 587", value: "587" },
+    { label: "HTTP (any)", value: "http" },
+    { label: "Port 80", value: "80" },
+    { label: "Port 443", value: "443" },
   ];
 
   const startPage = Math.max(1, currentPage - 2);
@@ -169,7 +169,35 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Filters */}
+        {/* Port Stats */}
+        <div className="stats-grid" style={{ marginBottom: 24 }}>
+          <div className="stat-card smtp-card">
+            <div className="value">{stats?.ports ? stats.ports.smtp.any.toLocaleString() : "-"}</div>
+            <div className="label">SMTP Proxies</div>
+          </div>
+          <div className="stat-card smtp-card">
+            <div className="value">{stats?.ports ? stats.ports.smtp[25].toLocaleString() : "-"}</div>
+            <div className="label">Port 25</div>
+          </div>
+          <div className="stat-card smtp-card">
+            <div className="value">{stats?.ports ? stats.ports.smtp[587].toLocaleString() : "-"}</div>
+            <div className="label">Port 587</div>
+          </div>
+          <div className="stat-card http-card">
+            <div className="value">{stats?.ports ? stats.ports.http.any.toLocaleString() : "-"}</div>
+            <div className="label">HTTP Proxies</div>
+          </div>
+          <div className="stat-card http-card">
+            <div className="value">{stats?.ports ? stats.ports.http[80].toLocaleString() : "-"}</div>
+            <div className="label">Port 80</div>
+          </div>
+          <div className="stat-card http-card">
+            <div className="value">{stats?.ports ? stats.ports.http[443].toLocaleString() : "-"}</div>
+            <div className="label">Port 443</div>
+          </div>
+        </div>
+
+        {/* Type Filters */}
         <div className="controls">
           {typeFilters.map((f) => (
             <button
@@ -193,6 +221,21 @@ export default function Dashboard() {
           </div>
         </div>
 
+        {/* Port Filters */}
+        <div className="controls" style={{ marginTop: -8 }}>
+          {portFilters.map((f) => (
+            <button
+              key={f.value}
+              className={`filter-btn port-filter ${
+                f.value.match(/^(smtp|25|587|465)$/) ? "smtp" : f.value.match(/^(http|80|443|8080)$/) ? "http-port" : ""
+              } ${currentPort === f.value ? "selected" : ""}`}
+              onClick={() => handlePort(f.value)}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+
         {/* Table */}
         <div className="table-wrapper">
           <table>
@@ -202,6 +245,8 @@ export default function Dashboard() {
                 <th>IP Address</th>
                 <th>Port</th>
                 <th>Type</th>
+                <th>SMTP Ports</th>
+                <th>HTTP Ports</th>
                 <th>Status</th>
                 <th>Source</th>
                 <th>Last Commit</th>
@@ -210,13 +255,9 @@ export default function Dashboard() {
             </thead>
             <tbody>
               {loading ? (
-                <tr>
-                  <td colSpan={8} className="loading">Loading proxies...</td>
-                </tr>
+                <tr><td colSpan={10} className="loading">Loading proxies...</td></tr>
               ) : proxies.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="loading">No proxies found</td>
-                </tr>
+                <tr><td colSpan={10} className="loading">No proxies found</td></tr>
               ) : (
                 proxies.map((p, i) => (
                   <tr key={p._id}>
@@ -224,6 +265,24 @@ export default function Dashboard() {
                     <td>{p.ip}</td>
                     <td>{p.port}</td>
                     <td><span className={`badge-type ${p.type}`}>{p.type}</span></td>
+                    <td>
+                      {p.smtpPorts && p.smtpPorts.length > 0 ? (
+                        p.smtpPorts.map((port) => (
+                          <span key={port} className="port-badge smtp">{port}</span>
+                        ))
+                      ) : (
+                        <span style={{ color: "#484f58" }}>-</span>
+                      )}
+                    </td>
+                    <td>
+                      {p.httpPorts && p.httpPorts.length > 0 ? (
+                        p.httpPorts.map((port) => (
+                          <span key={port} className="port-badge http-port">{port}</span>
+                        ))
+                      ) : (
+                        <span style={{ color: "#484f58" }}>-</span>
+                      )}
+                    </td>
                     <td><span className={`badge ${p.status}`}>{p.status}</span></td>
                     <td className="source-link">{p.source}</td>
                     <td style={{ color: "#8b949e" }}>{timeAgo(p.lastCommit)}</td>
@@ -245,28 +304,19 @@ export default function Dashboard() {
         {/* Pagination */}
         {pages > 1 && (
           <div className="pagination">
-            <button
-              className="page-btn"
-              disabled={currentPage <= 1}
-              onClick={() => { setCurrentPage(currentPage - 1); window.scrollTo({ top: 0, behavior: "smooth" }); }}
-            >
+            <button className="page-btn" disabled={currentPage <= 1}
+              onClick={() => { setCurrentPage(currentPage - 1); window.scrollTo({ top: 0, behavior: "smooth" }); }}>
               Prev
             </button>
             {pageButtons.map((p) => (
-              <button
-                key={p}
-                className={`page-btn ${p === currentPage ? "current" : ""}`}
-                onClick={() => { setCurrentPage(p); window.scrollTo({ top: 0, behavior: "smooth" }); }}
-              >
+              <button key={p} className={`page-btn ${p === currentPage ? "current" : ""}`}
+                onClick={() => { setCurrentPage(p); window.scrollTo({ top: 0, behavior: "smooth" }); }}>
                 {p}
               </button>
             ))}
             <span className="page-info">{total.toLocaleString()} proxies</span>
-            <button
-              className="page-btn"
-              disabled={currentPage >= pages}
-              onClick={() => { setCurrentPage(currentPage + 1); window.scrollTo({ top: 0, behavior: "smooth" }); }}
-            >
+            <button className="page-btn" disabled={currentPage >= pages}
+              onClick={() => { setCurrentPage(currentPage + 1); window.scrollTo({ top: 0, behavior: "smooth" }); }}>
               Next
             </button>
           </div>

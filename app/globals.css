@@ -175,6 +175,29 @@ tr:last-child td { border-bottom: none; }
 .source-link { color: #8b949e; font-size: 12px; }
 .last-update { color: #8b949e; font-size: 12px; margin-top: 8px; }
 
+/* Port badges */
+.port-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  margin-right: 4px;
+  font-family: 'SF Mono', 'Consolas', monospace;
+}
+.port-badge.smtp { background: #2a1f0a; color: #f0883e; }
+.port-badge.http-port { background: #12274e; color: #58a6ff; }
+
+/* Port stat cards */
+.stat-card.smtp-card .value { color: #f0883e; }
+.stat-card.http-card .value { color: #58a6ff; }
+
+/* Port filter buttons */
+.filter-btn.port-filter.smtp { border-left: 3px solid #f0883e; }
+.filter-btn.port-filter.http-port { border-left: 3px solid #58a6ff; }
+.filter-btn.port-filter.smtp.selected { background: #f0883e; color: #0f1117; border-color: #f0883e; }
+.filter-btn.port-filter.http-port.selected { background: #58a6ff; color: #0f1117; border-color: #58a6ff; }
+
 @media (max-width: 768px) {
   .container { padding: 12px; }
   .stats-grid { grid-template-columns: repeat(2, 1fr); }
