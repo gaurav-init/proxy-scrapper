@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Verifox — Free Proxy Dashboard</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f1117; color: #e1e4e8; min-height: 100vh; }
+
+    .header { background: linear-gradient(135deg, #1a1e2e, #252a3a); padding: 24px 32px; border-bottom: 1px solid #2d3348; }
+    .header h1 { font-size: 24px; font-weight: 700; color: #58a6ff; }
+    .header p { color: #8b949e; margin-top: 4px; font-size: 14px; }
+
+    .container { max-width: 1400px; margin: 0 auto; padding: 24px; }
+
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 24px; }
+    .stat-card { background: #161b22; border: 1px solid #2d3348; border-radius: 12px; padding: 20px; text-align: center; }
+    .stat-card .value { font-size: 32px; font-weight: 700; color: #58a6ff; }
+    .stat-card .label { font-size: 13px; color: #8b949e; margin-top: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .stat-card.active .value { color: #3fb950; }
+    .stat-card.inactive .value { color: #f85149; }
+
+    .controls { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; align-items: center; }
+    .filter-btn { padding: 8px 20px; border-radius: 8px; border: 1px solid #2d3348; background: #161b22; color: #e1e4e8; cursor: pointer; font-size: 14px; transition: all 0.2s; }
+    .filter-btn:hover { border-color: #58a6ff; }
+    .filter-btn.selected { background: #58a6ff; color: #0f1117; border-color: #58a6ff; font-weight: 600; }
+    .filter-btn.http { border-left: 3px solid #58a6ff; }
+    .filter-btn.https { border-left: 3px solid #3fb950; }
+    .filter-btn.socks4 { border-left: 3px solid #d29922; }
+    .filter-btn.socks5 { border-left: 3px solid #bc8cff; }
+    .filter-btn.http.selected { background: #58a6ff; }
+    .filter-btn.https.selected { background: #3fb950; }
+    .filter-btn.socks4.selected { background: #d29922; }
+    .filter-btn.socks5.selected { background: #bc8cff; }
+
+    .status-toggle { display: flex; gap: 8px; margin-left: auto; }
+    .status-btn { padding: 8px 16px; border-radius: 8px; border: 1px solid #2d3348; background: #161b22; color: #8b949e; cursor: pointer; font-size: 13px; transition: all 0.2s; }
+    .status-btn:hover { border-color: #58a6ff; }
+    .status-btn.selected { font-weight: 600; }
+    .status-btn.selected.active-btn { background: #0d3321; color: #3fb950; border-color: #3fb950; }
+    .status-btn.selected.inactive-btn { background: #3d1214; color: #f85149; border-color: #f85149; }
+    .status-btn.selected.all-btn { background: #1a2332; color: #58a6ff; border-color: #58a6ff; }
+
+    .table-wrapper { background: #161b22; border: 1px solid #2d3348; border-radius: 12px; overflow: hidden; }
+    table { width: 100%; border-collapse: collapse; }
+    th { background: #1c2129; padding: 14px 16px; text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: #8b949e; border-bottom: 1px solid #2d3348; }
+    td { padding: 12px 16px; border-bottom: 1px solid #1c2129; font-size: 14px; font-family: 'SF Mono', 'Consolas', monospace; }
+    tr:hover td { background: #1c2129; }
+    tr:last-child td { border-bottom: none; }
+
+    .badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; text-transform: uppercase; }
+    .badge.active { background: #0d3321; color: #3fb950; }
+    .badge.inactive { background: #3d1214; color: #f85149; }
+    .badge-type { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; text-transform: uppercase; }
+    .badge-type.http { background: #12274e; color: #58a6ff; }
+    .badge-type.https { background: #0d3321; color: #3fb950; }
+    .badge-type.socks4 { background: #2e1f0f; color: #d29922; }
+    .badge-type.socks5 { background: #231535; color: #bc8cff; }
+
+    .pagination { display: flex; justify-content: center; align-items: center; gap: 8px; margin-top: 20px; padding: 16px; }
+    .page-btn { padding: 8px 14px; border-radius: 8px; border: 1px solid #2d3348; background: #161b22; color: #e1e4e8; cursor: pointer; font-size: 13px; }
+    .page-btn:hover { border-color: #58a6ff; }
+    .page-btn:disabled { opacity: 0.3; cursor: default; }
+    .page-btn.current { background: #58a6ff; color: #0f1117; border-color: #58a6ff; }
+    .page-info { color: #8b949e; font-size: 13px; }
+
+    .copy-btn { background: none; border: 1px solid #2d3348; color: #8b949e; cursor: pointer; padding: 4px 8px; border-radius: 6px; font-size: 11px; margin-left: 8px; }
+    .copy-btn:hover { color: #58a6ff; border-color: #58a6ff; }
+    .copy-btn.copied { color: #3fb950; border-color: #3fb950; }
+
+    .loading { text-align: center; padding: 60px; color: #8b949e; font-size: 16px; }
+    .source-link { color: #8b949e; font-size: 12px; }
+
+    .last-update { color: #8b949e; font-size: 12px; margin-top: 8px; }
+
+    @media (max-width: 768px) {
+      .container { padding: 12px; }
+      .stats-grid { grid-template-columns: repeat(2, 1fr); }
+      .controls { flex-direction: column; }
+      .status-toggle { margin-left: 0; }
+      td, th { padding: 8px 10px; font-size: 12px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>Verifox Proxy Dashboard</h1>
+    <p>Free proxies scraped from GitHub — updated every hour</p>
+    <div class="last-update" id="lastUpdate"></div>
+  </div>
+
+  <div class="container">
+    <div class="stats-grid" id="statsGrid">
+      <div class="stat-card"><div class="value" id="totalCount">-</div><div class="label">Total Proxies</div></div>
+      <div class="stat-card active"><div class="value" id="activeCount">-</div><div class="label">Active</div></div>
+      <div class="stat-card inactive"><div class="value" id="inactiveCount">-</div><div class="label">Inactive</div></div>
+      <div class="stat-card"><div class="value" id="httpCount">-</div><div class="label">HTTP</div></div>
+      <div class="stat-card"><div class="value" id="httpsCount">-</div><div class="label">HTTPS</div></div>
+      <div class="stat-card"><div class="value" id="socks4Count">-</div><div class="label">SOCKS4</div></div>
+      <div class="stat-card"><div class="value" id="socks5Count">-</div><div class="label">SOCKS5</div></div>
+    </div>
+
+    <div class="controls">
+      <button class="filter-btn selected" data-type="" onclick="setType(this)">All Types</button>
+      <button class="filter-btn http" data-type="http" onclick="setType(this)">HTTP</button>
+      <button class="filter-btn https" data-type="https" onclick="setType(this)">HTTPS</button>
+      <button class="filter-btn socks4" data-type="socks4" onclick="setType(this)">SOCKS4</button>
+      <button class="filter-btn socks5" data-type="socks5" onclick="setType(this)">SOCKS5</button>
+
+      <div class="status-toggle">
+        <button class="status-btn active-btn selected" data-status="active" onclick="setStatus(this)">Active</button>
+        <button class="status-btn inactive-btn" data-status="inactive" onclick="setStatus(this)">Inactive</button>
+        <button class="status-btn all-btn" data-status="" onclick="setStatus(this)">All</button>
+      </div>
+    </div>
+
+    <div class="table-wrapper">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>IP Address</th>
+            <th>Port</th>
+            <th>Type</th>
+            <th>Status</th>
+            <th>Source</th>
+            <th>Last Commit</th>
+            <th>Copy</th>
+          </tr>
+        </thead>
+        <tbody id="proxyTable">
+          <tr><td colspan="8" class="loading">Loading proxies...</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="pagination" id="pagination"></div>
+  </div>
+
+  <script>
+    let currentType = "";
+    let currentStatus = "active";
+    let currentPage = 1;
+    const LIMIT = 50;
+
+    function setType(btn) {
+      document.querySelectorAll(".filter-btn").forEach(b => b.classList.remove("selected"));
+      btn.classList.add("selected");
+      currentType = btn.dataset.type;
+      currentPage = 1;
+      loadProxies();
+    }
+
+    function setStatus(btn) {
+      document.querySelectorAll(".status-btn").forEach(b => b.classList.remove("selected"));
+      btn.classList.add("selected");
+      currentStatus = btn.dataset.status;
+      currentPage = 1;
+      loadProxies();
+    }
+
+    function timeAgo(dateStr) {
+      if (!dateStr) return "-";
+      const diff = Date.now() - new Date(dateStr).getTime();
+      const mins = Math.floor(diff / 60000);
+      if (mins < 60) return mins + "m ago";
+      const hrs = Math.floor(mins / 60);
+      if (hrs < 24) return hrs + "h ago";
+      const days = Math.floor(hrs / 24);
+      return days + "d ago";
+    }
+
+    function copyProxy(ip, port, btn) {
+      navigator.clipboard.writeText(ip + ":" + port);
+      btn.textContent = "Copied!";
+      btn.classList.add("copied");
+      setTimeout(() => { btn.textContent = "Copy"; btn.classList.remove("copied"); }, 1500);
+    }
+
+    async function loadStats() {
+      try {
+        const res = await fetch("/api/stats");
+        const data = await res.json();
+        document.getElementById("totalCount").textContent = (data.total || 0).toLocaleString();
+        document.getElementById("activeCount").textContent = (data.byStatus.active || 0).toLocaleString();
+        document.getElementById("inactiveCount").textContent = (data.byStatus.inactive || 0).toLocaleString();
+        document.getElementById("httpCount").textContent = ((data.activeByType.http || 0)).toLocaleString();
+        document.getElementById("httpsCount").textContent = ((data.activeByType.https || 0)).toLocaleString();
+        document.getElementById("socks4Count").textContent = ((data.activeByType.socks4 || 0)).toLocaleString();
+        document.getElementById("socks5Count").textContent = ((data.activeByType.socks5 || 0)).toLocaleString();
+      } catch (e) {
+        console.error("Failed to load stats:", e);
+      }
+    }
+
+    async function loadProxies() {
+      const tbody = document.getElementById("proxyTable");
+      tbody.innerHTML = '<tr><td colspan="8" class="loading">Loading...</td></tr>';
+
+      const params = new URLSearchParams({ page: currentPage, limit: LIMIT });
+      if (currentType) params.set("type", currentType);
+      if (currentStatus) params.set("status", currentStatus);
+
+      try {
+        const res = await fetch("/api/proxies?" + params);
+        const data = await res.json();
+
+        if (data.proxies.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="8" class="loading">No proxies found</td></tr>';
+          document.getElementById("pagination").innerHTML = "";
+          return;
+        }
+
+        tbody.innerHTML = data.proxies.map((p, i) => `
+          <tr>
+            <td style="color:#8b949e">${(currentPage - 1) * LIMIT + i + 1}</td>
+            <td>${p.ip}</td>
+            <td>${p.port}</td>
+            <td><span class="badge-type ${p.type}">${p.type}</span></td>
+            <td><span class="badge ${p.status}">${p.status}</span></td>
+            <td class="source-link">${p.source}</td>
+            <td style="color:#8b949e">${timeAgo(p.lastCommit)}</td>
+            <td><button class="copy-btn" onclick="copyProxy('${p.ip}',${p.port},this)">Copy</button></td>
+          </tr>
+        `).join("");
+
+        // Pagination
+        const pag = document.getElementById("pagination");
+        let html = "";
+        html += `<button class="page-btn" onclick="goPage(${currentPage - 1})" ${currentPage <= 1 ? "disabled" : ""}>Prev</button>`;
+
+        const start = Math.max(1, currentPage - 2);
+        const end = Math.min(data.pages, currentPage + 2);
+        for (let p = start; p <= end; p++) {
+          html += `<button class="page-btn ${p === currentPage ? 'current' : ''}" onclick="goPage(${p})">${p}</button>`;
+        }
+
+        html += `<span class="page-info">${data.total.toLocaleString()} proxies</span>`;
+        html += `<button class="page-btn" onclick="goPage(${currentPage + 1})" ${currentPage >= data.pages ? "disabled" : ""}>Next</button>`;
+        pag.innerHTML = html;
+
+        document.getElementById("lastUpdate").textContent =
+          "Last scraped: " + (data.proxies[0]?.scrapedAt ? new Date(data.proxies[0].scrapedAt).toLocaleString() : "-");
+      } catch (e) {
+        tbody.innerHTML = '<tr><td colspan="8" class="loading">Error loading proxies</td></tr>';
+        console.error(e);
+      }
+    }
+
+    function goPage(p) {
+      currentPage = p;
+      loadProxies();
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+
+    loadStats();
+    loadProxies();
+    // Auto-refresh every 5 minutes
+    setInterval(() => { loadStats(); loadProxies(); }, 300000);
+  </script>
+</body>
+</html>
