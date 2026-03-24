@@ -162,7 +162,7 @@ async function scrape() {
               lastCommit: proxy.lastCommit,
               status: proxy.status,
             },
-            $setOnInsert: { firstSeen: now },
+            $setOnInsert: { firstSeen: now, openPorts: [], smtpPorts: [], httpPorts: [] },
           },
           upsert: true,
         },

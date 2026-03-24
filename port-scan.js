@@ -1,113 +1,46 @@
 require("dotenv").config();
 const net = require("net");
-const { SocksClient } = require("socks");
 const { MongoClient } = require("mongodb");
 
 const MONGO_URI = process.env.MONGO_URI || "mongodb://localhost:27017";
 const DB_NAME = "verifox";
 const COLLECTION_NAME = "free-proxy";
 
-// Test SMTP server — connect through proxy to this target
-const SMTP_TEST_HOST = "smtp.gmail.com";
-const SMTP_TEST_PORTS = [25, 587];
-// Test HTTP target
-const HTTP_TEST_HOST = "httpbin.org";
-const HTTP_TEST_PORTS = [80, 443];
+// Check ports directly on the proxy IP
+const SMTP_PORTS = [25, 587, 465];
+const HTTP_PORTS = [80, 443, 8080];
+const ALL_PORTS = [...SMTP_PORTS, ...HTTP_PORTS];
 
-const TIMEOUT = 5000;
-const CONCURRENCY = 50;
+const TIMEOUT = 3000;
+const CONCURRENCY = 300;
 
-// Map proxy type to SOCKS type
-function getSocksType(proxyType) {
-  if (proxyType === "socks5") return 5;
-  if (proxyType === "socks4") return 4;
-  return null;
-}
-
-// Test if a SOCKS proxy allows connecting to target:port
-async function testSocksProxy(proxyIp, proxyPort, socksType, targetHost, targetPort) {
-  try {
-    const info = await SocksClient.createConnection({
-      proxy: { host: proxyIp, port: proxyPort, type: socksType },
-      command: "connect",
-      destination: { host: targetHost, port: targetPort },
-      timeout: TIMEOUT,
-    });
-    info.socket.destroy();
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-// Test if an HTTP/HTTPS proxy allows CONNECT to target:port
-async function testHttpProxy(proxyIp, proxyPort, targetHost, targetPort) {
+function checkPort(ip, port) {
   return new Promise((resolve) => {
     const socket = new net.Socket();
     socket.setTimeout(TIMEOUT);
-
-    socket.on("connect", () => {
-      // Send HTTP CONNECT request
-      socket.write(
-        `CONNECT ${targetHost}:${targetPort} HTTP/1.1\r\nHost: ${targetHost}:${targetPort}\r\n\r\n`
-      );
-    });
-
-    socket.on("data", (data) => {
-      const response = data.toString();
-      socket.destroy();
-      // 200 means tunnel established
-      resolve(response.includes("200"));
-    });
-
-    socket.on("timeout", () => { socket.destroy(); resolve(false); });
-    socket.on("error", () => { socket.destroy(); resolve(false); });
-
-    socket.connect(proxyPort, proxyIp);
+    socket.on("connect", () => { socket.destroy(); resolve(port); });
+    socket.on("timeout", () => { socket.destroy(); resolve(null); });
+    socket.on("error", () => { socket.destroy(); resolve(null); });
+    socket.connect(port, ip);
   });
 }
 
-// Test a single proxy for SMTP and HTTP connectivity
-async function testProxy(proxy) {
-  const socksType = getSocksType(proxy.type);
-  const smtpOpen = [];
-  const httpOpen = [];
-
-  // Test SMTP ports through proxy
-  for (const port of SMTP_TEST_PORTS) {
-    let ok = false;
-    if (socksType) {
-      ok = await testSocksProxy(proxy.ip, proxy.port, socksType, SMTP_TEST_HOST, port);
-    } else {
-      ok = await testHttpProxy(proxy.ip, proxy.port, SMTP_TEST_HOST, port);
-    }
-    if (ok) smtpOpen.push(port);
-  }
-
-  // Test HTTP ports through proxy
-  for (const port of HTTP_TEST_PORTS) {
-    let ok = false;
-    if (socksType) {
-      ok = await testSocksProxy(proxy.ip, proxy.port, socksType, HTTP_TEST_HOST, port);
-    } else {
-      ok = await testHttpProxy(proxy.ip, proxy.port, HTTP_TEST_HOST, port);
-    }
-    if (ok) httpOpen.push(port);
-  }
-
+async function scanPorts(ip) {
+  const results = await Promise.all(ALL_PORTS.map((p) => checkPort(ip, p)));
+  const open = results.filter((p) => p !== null);
   return {
-    ip: proxy.ip,
-    smtpPorts: smtpOpen,
-    httpPorts: httpOpen,
-    openPorts: [...smtpOpen, ...httpOpen],
+    openPorts: open,
+    smtpPorts: open.filter((p) => SMTP_PORTS.includes(p)),
+    httpPorts: open.filter((p) => HTTP_PORTS.includes(p)),
   };
 }
 
 async function run() {
   const startTime = Date.now();
   console.log(`\n--- Port Scan Started: ${new Date().toISOString()} ---`);
-  console.log(`Testing SMTP via: ${SMTP_TEST_HOST}:${SMTP_TEST_PORTS.join(",")}`);
-  console.log(`Testing HTTP via: ${HTTP_TEST_HOST}:${HTTP_TEST_PORTS.join(",")}`);
+  console.log(`SMTP ports: ${SMTP_PORTS.join(", ")}`);
+  console.log(`HTTP ports: ${HTTP_PORTS.join(", ")}`);
+  console.log(`Scanning directly on proxy IP (not through proxy)`);
 
   const client = new MongoClient(MONGO_URI);
   await client.connect();
@@ -118,16 +51,21 @@ async function run() {
   await col.createIndex({ httpPorts: 1 });
 
   // Only scan active proxies
-  const proxies = await col
-    .find({ status: "active" })
-    .project({ ip: 1, port: 1, type: 1 })
-    .toArray();
-  console.log(`Active proxies to scan: ${proxies.length}`);
+  const proxies = await col.find({ status: "active" }).project({ ip: 1 }).toArray();
+  console.log(`Active proxies to scan: ${proxies.length}\n`);
 
   let completed = 0;
+  let totalSmtp = 0;
+  let totalHttp = 0;
+
   for (let i = 0; i < proxies.length; i += CONCURRENCY) {
     const batch = proxies.slice(i, i + CONCURRENCY);
-    const results = await Promise.all(batch.map(testProxy));
+    const results = await Promise.all(
+      batch.map(async (proxy) => {
+        const scan = await scanPorts(proxy.ip);
+        return { ip: proxy.ip, ...scan };
+      })
+    );
 
     const bulkOps = results.map((r) => ({
       updateOne: {
@@ -143,33 +81,31 @@ async function run() {
     }));
     await col.bulkWrite(bulkOps, { ordered: false });
 
+    const batchSmtp = results.filter((r) => r.smtpPorts.length > 0).length;
+    const batchHttp = results.filter((r) => r.httpPorts.length > 0).length;
+    totalSmtp += batchSmtp;
+    totalHttp += batchHttp;
     completed += batch.length;
-    const smtpHits = results.filter((r) => r.smtpPorts.length > 0).length;
-    const httpHits = results.filter((r) => r.httpPorts.length > 0).length;
-    if (completed % 500 === 0 || completed === proxies.length) {
+
+    if (completed % 600 === 0 || completed === proxies.length) {
       console.log(
-        `  Scanned ${completed}/${proxies.length} (batch: ${smtpHits} smtp, ${httpHits} http)`
+        `  ${completed}/${proxies.length} scanned | SMTP found: ${totalSmtp} | HTTP found: ${totalHttp}`
       );
     }
   }
 
-  // Set empty arrays for unscanned proxies
-  await col.updateMany(
-    { openPorts: { $exists: false } },
-    { $set: { openPorts: [], smtpPorts: [], httpPorts: [] } }
-  );
-
   // Stats
   const withSmtp25 = await col.countDocuments({ smtpPorts: 25 });
   const withSmtp587 = await col.countDocuments({ smtpPorts: 587 });
+  const withSmtp465 = await col.countDocuments({ smtpPorts: 465 });
   const withAnySmtp = await col.countDocuments({ "smtpPorts.0": { $exists: true } });
   const withHttp80 = await col.countDocuments({ httpPorts: 80 });
   const withHttp443 = await col.countDocuments({ httpPorts: 443 });
   const withAnyHttp = await col.countDocuments({ "httpPorts.0": { $exists: true } });
 
   console.log(`\n=== Results ===`);
-  console.log(`SMTP: port25=${withSmtp25} | port587=${withSmtp587} | any=${withAnySmtp}`);
-  console.log(`HTTP: port80=${withHttp80} | port443=${withHttp443} | any=${withAnyHttp}`);
+  console.log(`SMTP: port25=${withSmtp25} | port587=${withSmtp587} | port465=${withSmtp465} | total=${withAnySmtp}`);
+  console.log(`HTTP: port80=${withHttp80} | port443=${withHttp443} | total=${withAnyHttp}`);
 
   await client.close();
 
