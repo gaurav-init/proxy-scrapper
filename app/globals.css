@@ -192,6 +192,22 @@ tr:last-child td { border-bottom: none; }
 .stat-card.smtp-card .value { color: #f0883e; }
 .stat-card.http-card .value { color: #58a6ff; }
 
+/* Country */
+.country-badge { font-size: 13px; white-space: nowrap; }
+.country-select {
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: 1px solid #2d3348;
+  background: #161b22;
+  color: #e1e4e8;
+  cursor: pointer;
+  font-size: 14px;
+  margin-left: auto;
+  min-width: 160px;
+}
+.country-select:hover { border-color: #58a6ff; }
+.country-select:focus { outline: none; border-color: #58a6ff; }
+
 /* Port filter buttons */
 .filter-btn.port-filter.smtp { border-left: 3px solid #f0883e; }
 .filter-btn.port-filter.http-port { border-left: 3px solid #58a6ff; }

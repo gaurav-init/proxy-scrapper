@@ -11,6 +11,7 @@ export async function GET(req: NextRequest) {
     const filter: Record<string, any> = {};
     if (searchParams.get("status")) filter.status = searchParams.get("status")!;
     if (searchParams.get("type")) filter.type = searchParams.get("type")!;
+    if (searchParams.get("country")) filter.country = searchParams.get("country")!;
 
     // Port filters: smtp, http, or specific port number
     const portFilter = searchParams.get("port");

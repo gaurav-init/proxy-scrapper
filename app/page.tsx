@@ -13,6 +13,13 @@ interface Proxy {
   scrapedAt: string;
   smtpPorts?: number[];
   httpPorts?: number[];
+  country?: string;
+  city?: string;
+}
+
+interface CountryEntry {
+  code: string;
+  count: number;
 }
 
 interface Stats {
@@ -24,6 +31,7 @@ interface Stats {
     smtp: { 25: number; 587: number; any: number };
     http: { 80: number; 443: number; any: number };
   };
+  byCountry?: CountryEntry[];
 }
 
 function timeAgo(dateStr: string | null) {
@@ -36,6 +44,25 @@ function timeAgo(dateStr: string | null) {
   return Math.floor(hrs / 24) + "d ago";
 }
 
+const FLAG: Record<string, string> = {
+  US: "\u{1F1FA}\u{1F1F8}", DE: "\u{1F1E9}\u{1F1EA}", FR: "\u{1F1EB}\u{1F1F7}", GB: "\u{1F1EC}\u{1F1E7}",
+  CN: "\u{1F1E8}\u{1F1F3}", JP: "\u{1F1EF}\u{1F1F5}", IN: "\u{1F1EE}\u{1F1F3}", BR: "\u{1F1E7}\u{1F1F7}",
+  RU: "\u{1F1F7}\u{1F1FA}", KR: "\u{1F1F0}\u{1F1F7}", CA: "\u{1F1E8}\u{1F1E6}", AU: "\u{1F1E6}\u{1F1FA}",
+  NL: "\u{1F1F3}\u{1F1F1}", SG: "\u{1F1F8}\u{1F1EC}", ID: "\u{1F1EE}\u{1F1E9}", TH: "\u{1F1F9}\u{1F1ED}",
+  VN: "\u{1F1FB}\u{1F1F3}", PL: "\u{1F1F5}\u{1F1F1}", TR: "\u{1F1F9}\u{1F1F7}", UA: "\u{1F1FA}\u{1F1E6}",
+  IT: "\u{1F1EE}\u{1F1F9}", ES: "\u{1F1EA}\u{1F1F8}", MX: "\u{1F1F2}\u{1F1FD}", AR: "\u{1F1E6}\u{1F1F7}",
+  BD: "\u{1F1E7}\u{1F1E9}", PK: "\u{1F1F5}\u{1F1F0}", EG: "\u{1F1EA}\u{1F1EC}", IR: "\u{1F1EE}\u{1F1F7}",
+  HK: "\u{1F1ED}\u{1F1F0}", TW: "\u{1F1F9}\u{1F1FC}", PH: "\u{1F1F5}\u{1F1ED}", MY: "\u{1F1F2}\u{1F1FE}",
+  CL: "\u{1F1E8}\u{1F1F1}", CO: "\u{1F1E8}\u{1F1F4}", ZA: "\u{1F1FF}\u{1F1E6}", NG: "\u{1F1F3}\u{1F1EC}",
+  SE: "\u{1F1F8}\u{1F1EA}", FI: "\u{1F1EB}\u{1F1EE}", NO: "\u{1F1F3}\u{1F1F4}", DK: "\u{1F1E9}\u{1F1F0}",
+  CH: "\u{1F1E8}\u{1F1ED}", AT: "\u{1F1E6}\u{1F1F9}", BE: "\u{1F1E7}\u{1F1EA}", PT: "\u{1F1F5}\u{1F1F9}",
+  CZ: "\u{1F1E8}\u{1F1FF}", RO: "\u{1F1F7}\u{1F1F4}", HU: "\u{1F1ED}\u{1F1FA}", BG: "\u{1F1E7}\u{1F1EC}",
+};
+
+function flag(code: string) {
+  return FLAG[code] || "";
+}
+
 export default function Dashboard() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [proxies, setProxies] = useState<Proxy[]>([]);
@@ -44,6 +71,7 @@ export default function Dashboard() {
   const [currentType, setCurrentType] = useState("");
   const [currentStatus, setCurrentStatus] = useState("active");
   const [currentPort, setCurrentPort] = useState("");
+  const [currentCountry, setCurrentCountry] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -64,6 +92,7 @@ export default function Dashboard() {
     if (currentType) params.set("type", currentType);
     if (currentStatus) params.set("status", currentStatus);
     if (currentPort) params.set("port", currentPort);
+    if (currentCountry) params.set("country", currentCountry);
 
     try {
       const res = await fetch("/api/proxies?" + params);
@@ -76,7 +105,7 @@ export default function Dashboard() {
     } finally {
       setLoading(false);
     }
-  }, [currentPage, currentType, currentStatus, currentPort]);
+  }, [currentPage, currentType, currentStatus, currentPort, currentCountry]);
 
   useEffect(() => { loadStats(); }, [loadStats]);
   useEffect(() => { loadProxies(); }, [loadProxies]);
@@ -88,6 +117,7 @@ export default function Dashboard() {
   function handleType(v: string) { setCurrentType(v); setCurrentPage(1); }
   function handleStatus(v: string) { setCurrentStatus(v); setCurrentPage(1); }
   function handlePort(v: string) { setCurrentPort(v); setCurrentPage(1); }
+  function handleCountry(v: string) { setCurrentCountry(v); setCurrentPage(1); }
 
   function copyProxy(ip: string, port: number, id: string) {
     navigator.clipboard.writeText(ip + ":" + port);
@@ -234,6 +264,20 @@ export default function Dashboard() {
               {f.label}
             </button>
           ))}
+
+          {/* Country Dropdown */}
+          <select
+            className="country-select"
+            value={currentCountry}
+            onChange={(e) => handleCountry(e.target.value)}
+          >
+            <option value="">All Countries</option>
+            {stats?.byCountry?.map((c) => (
+              <option key={c.code} value={c.code}>
+                {flag(c.code)} {c.code} ({c.count.toLocaleString()})
+              </option>
+            ))}
+          </select>
         </div>
 
         {/* Table */}
@@ -245,6 +289,7 @@ export default function Dashboard() {
                 <th>IP Address</th>
                 <th>Port</th>
                 <th>Type</th>
+                <th>Country</th>
                 <th>SMTP Ports</th>
                 <th>HTTP Ports</th>
                 <th>Status</th>
@@ -255,9 +300,9 @@ export default function Dashboard() {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={10} className="loading">Loading proxies...</td></tr>
+                <tr><td colSpan={11} className="loading">Loading proxies...</td></tr>
               ) : proxies.length === 0 ? (
-                <tr><td colSpan={10} className="loading">No proxies found</td></tr>
+                <tr><td colSpan={11} className="loading">No proxies found</td></tr>
               ) : (
                 proxies.map((p, i) => (
                   <tr key={p._id}>
@@ -265,6 +310,11 @@ export default function Dashboard() {
                     <td>{p.ip}</td>
                     <td>{p.port}</td>
                     <td><span className={`badge-type ${p.type}`}>{p.type}</span></td>
+                    <td>
+                      <span className="country-badge" title={p.city || ""}>
+                        {flag(p.country || "")} {p.country || "??"}
+                      </span>
+                    </td>
                     <td>
                       {p.smtpPorts && p.smtpPorts.length > 0 ? (
                         p.smtpPorts.map((port) => (

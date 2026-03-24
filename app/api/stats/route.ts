@@ -30,6 +30,15 @@ export async function GET() {
         col.countDocuments({ "httpPorts.0": { $exists: true } }),
       ]);
 
+    // Top countries
+    const byCountry = await col
+      .aggregate([
+        { $group: { _id: "$country", count: { $sum: 1 } } },
+        { $sort: { count: -1 } },
+        { $limit: 50 },
+      ])
+      .toArray();
+
     return NextResponse.json({
       total,
       byType: Object.fromEntries(byType.map((r) => [r._id, r.count])),
@@ -39,6 +48,7 @@ export async function GET() {
         smtp: { 25: smtp25, 587: smtp587, any: anySmtp },
         http: { 80: http80, 443: http443, any: anyHttp },
       },
+      byCountry: byCountry.map((r) => ({ code: r._id, count: r.count })),
     });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });

@@ -6,13 +6,12 @@ const MONGO_URI = process.env.MONGO_URI || "mongodb://localhost:27017";
 const DB_NAME = "verifox";
 const COLLECTION_NAME = "free-proxy";
 
-// Check ports directly on the proxy IP
 const SMTP_PORTS = [25, 587, 465];
 const HTTP_PORTS = [80, 443, 8080];
 const ALL_PORTS = [...SMTP_PORTS, ...HTTP_PORTS];
 
-const TIMEOUT = 3000;
-const CONCURRENCY = 300;
+const TIMEOUT = 1500;      // 1.5s — open ports respond in <500ms
+const CONCURRENCY = 1000;  // 1000 IPs at once (each checks 6 ports = 6000 sockets)
 
 function checkPort(ip, port) {
   return new Promise((resolve) => {
@@ -38,9 +37,7 @@ async function scanPorts(ip) {
 async function run() {
   const startTime = Date.now();
   console.log(`\n--- Port Scan Started: ${new Date().toISOString()} ---`);
-  console.log(`SMTP ports: ${SMTP_PORTS.join(", ")}`);
-  console.log(`HTTP ports: ${HTTP_PORTS.join(", ")}`);
-  console.log(`Scanning directly on proxy IP (not through proxy)`);
+  console.log(`Ports: ${ALL_PORTS.join(", ")} | Timeout: ${TIMEOUT}ms | Concurrency: ${CONCURRENCY}`);
 
   const client = new MongoClient(MONGO_URI);
   await client.connect();
@@ -49,14 +46,33 @@ async function run() {
   await col.createIndex({ openPorts: 1 });
   await col.createIndex({ smtpPorts: 1 });
   await col.createIndex({ httpPorts: 1 });
+  await col.createIndex({ portScannedAt: 1 });
 
-  // Only scan active proxies
-  const proxies = await col.find({ status: "active" }).project({ ip: 1 }).toArray();
-  console.log(`Active proxies to scan: ${proxies.length}\n`);
+  // Only scan active proxies that haven't been scanned in the last hour
+  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+  const proxies = await col
+    .find({
+      status: "active",
+      $or: [
+        { portScannedAt: { $exists: false } },
+        { portScannedAt: { $lt: oneHourAgo } },
+      ],
+    })
+    .project({ ip: 1 })
+    .toArray();
+
+  console.log(`IPs to scan: ${proxies.length} (skipping recently scanned)\n`);
+
+  if (proxies.length === 0) {
+    console.log("Nothing to scan — all active proxies already scanned this hour.");
+    await client.close();
+    return;
+  }
 
   let completed = 0;
   let totalSmtp = 0;
   let totalHttp = 0;
+  const now = new Date();
 
   for (let i = 0; i < proxies.length; i += CONCURRENCY) {
     const batch = proxies.slice(i, i + CONCURRENCY);
@@ -75,6 +91,7 @@ async function run() {
             openPorts: r.openPorts,
             smtpPorts: r.smtpPorts,
             httpPorts: r.httpPorts,
+            portScannedAt: now,
           },
         },
       },
@@ -87,24 +104,27 @@ async function run() {
     totalHttp += batchHttp;
     completed += batch.length;
 
-    if (completed % 600 === 0 || completed === proxies.length) {
+    if (completed % 2000 === 0 || completed === proxies.length) {
+      const elapsed = ((Date.now() - startTime) / 1000).toFixed(0);
       console.log(
-        `  ${completed}/${proxies.length} scanned | SMTP found: ${totalSmtp} | HTTP found: ${totalHttp}`
+        `  ${completed}/${proxies.length} (${elapsed}s) | SMTP: ${totalSmtp} | HTTP: ${totalHttp}`
       );
     }
   }
 
   // Stats
-  const withSmtp25 = await col.countDocuments({ smtpPorts: 25 });
-  const withSmtp587 = await col.countDocuments({ smtpPorts: 587 });
-  const withSmtp465 = await col.countDocuments({ smtpPorts: 465 });
-  const withAnySmtp = await col.countDocuments({ "smtpPorts.0": { $exists: true } });
-  const withHttp80 = await col.countDocuments({ httpPorts: 80 });
-  const withHttp443 = await col.countDocuments({ httpPorts: 443 });
-  const withAnyHttp = await col.countDocuments({ "httpPorts.0": { $exists: true } });
+  const [withSmtp25, withSmtp587, withAnySmtp, withHttp80, withHttp443, withAnyHttp] =
+    await Promise.all([
+      col.countDocuments({ smtpPorts: 25 }),
+      col.countDocuments({ smtpPorts: 587 }),
+      col.countDocuments({ "smtpPorts.0": { $exists: true } }),
+      col.countDocuments({ httpPorts: 80 }),
+      col.countDocuments({ httpPorts: 443 }),
+      col.countDocuments({ "httpPorts.0": { $exists: true } }),
+    ]);
 
   console.log(`\n=== Results ===`);
-  console.log(`SMTP: port25=${withSmtp25} | port587=${withSmtp587} | port465=${withSmtp465} | total=${withAnySmtp}`);
+  console.log(`SMTP: port25=${withSmtp25} | port587=${withSmtp587} | total=${withAnySmtp}`);
   console.log(`HTTP: port80=${withHttp80} | port443=${withHttp443} | total=${withAnyHttp}`);
 
   await client.close();

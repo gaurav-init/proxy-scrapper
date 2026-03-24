@@ -1,5 +1,6 @@
 require("dotenv").config();
 const axios = require("axios");
+const geoip = require("geoip-lite");
 const { MongoClient } = require("mongodb");
 const PROXY_SOURCES = require("./sources");
 
@@ -96,10 +97,10 @@ async function scrape() {
 
   commitCache.clear();
 
-  // Fetch sources in batches of 5 to avoid overwhelming
+  // Fetch sources in batches of 10
   const allProxies = [];
-  for (let i = 0; i < PROXY_SOURCES.length; i += 5) {
-    const batch = PROXY_SOURCES.slice(i, i + 5);
+  for (let i = 0; i < PROXY_SOURCES.length; i += 10) {
+    const batch = PROXY_SOURCES.slice(i, i + 10);
     const results = await Promise.all(batch.map(fetchSource));
     for (const result of results) {
       for (const proxy of result) {
@@ -141,6 +142,7 @@ async function scrape() {
     await collection.createIndex({ type: 1 });
     await collection.createIndex({ status: 1 });
     await collection.createIndex({ scrapedAt: 1 });
+    await collection.createIndex({ country: 1 });
 
     const now = new Date();
 
@@ -149,33 +151,38 @@ async function scrape() {
     let updated = 0;
     for (let i = 0; i < unique.length; i += 500) {
       const batch = unique.slice(i, i + 500);
-      const bulkOps = batch.map((proxy) => ({
-        updateOne: {
-          filter: { ip: proxy.ip },
-          update: {
-            $set: {
-              ip: proxy.ip,
-              port: proxy.port,
-              type: proxy.type,
-              source: proxy.source,
-              scrapedAt: now,
-              lastCommit: proxy.lastCommit,
-              status: proxy.status,
+      const bulkOps = batch.map((proxy) => {
+        const geo = geoip.lookup(proxy.ip);
+        return {
+          updateOne: {
+            filter: { ip: proxy.ip },
+            update: {
+              $set: {
+                ip: proxy.ip,
+                port: proxy.port,
+                type: proxy.type,
+                source: proxy.source,
+                scrapedAt: now,
+                lastCommit: proxy.lastCommit,
+                status: proxy.status,
+                country: geo ? geo.country : "??",
+                city: geo ? geo.city : "",
+              },
+              $setOnInsert: { firstSeen: now, openPorts: [], smtpPorts: [], httpPorts: [] },
             },
-            $setOnInsert: { firstSeen: now, openPorts: [], smtpPorts: [], httpPorts: [] },
+            upsert: true,
           },
-          upsert: true,
-        },
-      }));
+        };
+      });
       const result = await collection.bulkWrite(bulkOps, { ordered: false });
       inserted += result.upsertedCount || 0;
       updated += result.modifiedCount || 0;
     }
 
-    // Old proxies not in this scrape → inactive
+    // Old proxies not in this scrape → inactive, clear port data
     await collection.updateMany(
       { scrapedAt: { $lt: now } },
-      { $set: { status: "inactive" } }
+      { $set: { status: "inactive", openPorts: [], smtpPorts: [], httpPorts: [] }, $unset: { portScannedAt: "" } }
     );
 
     console.log(`\nDB: ${inserted} new, ${updated} updated`);
