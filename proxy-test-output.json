@@ -1,0 +1,71 @@
+{
+  "meta": {
+    "title": "Turnix | Replace Your Teams with AI Agents",
+    "description": "Turnix builds AI agents that automate entire workflows—from customer support to content ops. Trusted by global brands and built by award-winning developers.",
+    "canonical": "",
+    "ogTitle": "Turnix | Replace Your Teams with AI Agents",
+    "ogDesc": "Turnix builds AI agents that automate entire workflows—from customer support to content ops. Trusted by global brands and built by award-winning developers.",
+    "ogImage": "",
+    "ogUrl": "https://turnix.co"
+  },
+  "headings": {
+    "h1": [
+      "We Help Businesses Integrate A.I."
+    ],
+    "h2": [
+      "Trusted By",
+      "Our Products",
+      "Our Numbers"
+    ]
+  },
+  "assets": {
+    "css": [
+      "/_next/static/chunks/89bb9ba2caf89bbe.css"
+    ],
+    "js": [
+      "/_next/static/chunks/07e6fb6b61935bd2.js",
+      "/_next/static/chunks/5208b4d785e83758.js",
+      "/_next/static/chunks/d4cf4caae891f664.js",
+      "/_next/static/chunks/82abf2d65f5428ae.js",
+      "/_next/static/chunks/turbopack-56b5b03a932503d1.js",
+      "/_next/static/chunks/744355e03808d4c7.js",
+      "/_next/static/chunks/ff1a16fafef87110.js",
+      "/_next/static/chunks/d2be314c3ece3fbe.js",
+      "/_next/static/chunks/1032da42c11017e9.js",
+      "/_next/static/chunks/a6dad97d9634a72d.js"
+    ],
+    "images": [
+      "/_next/image?url=%2F_next%2Fstatic%2Fmedia%2Fturnix.053fd608.webp&amp;w=828&amp;q=75",
+      "/_next/image?url=%2F_next%2Fstatic%2Fmedia%2FCommBank.491fc0a0.png&amp;w=640&amp;q=75",
+      "/_next/image?url=%2F_next%2Fstatic%2Fmedia%2FACY.3918390a.png&amp;w=640&amp;q=75",
+      "/_next/image?url=%2F_next%2Fstatic%2Fmedia%2FZeroLogix.5289c84d.png&amp;w=640&amp;q=75",
+      "/_next/image?url=%2F_next%2Fstatic%2Fmedia%2FTHN.230ff2dd.png&amp;w=640&amp;q=75",
+      "/_next/image?url=%2F_next%2Fstatic%2Fmedia%2FZova.0897e4fa.png&amp;w=640&amp;q=75",
+      "/_next/static/media/nailib.e30258f0.svg",
+      "/_next/static/media/examplit.c2c97f2e.svg",
+      "/_next/image?url=%2F_next%2Fstatic%2Fmedia%2Fvlon.9e906abb.png&amp;w=384&amp;q=75",
+      "/_next/image?url=%2F_next%2Fstatic%2Fmedia%2Fgriddio.e9138d85.png&amp;w=384&amp;q=75"
+    ]
+  },
+  "externalLinks": [
+    "https://www.googletagmanager.com",
+    "https://www.google-analytics.com",
+    "https://connect.facebook.net",
+    "https://tidycal.com/team/turnix/30-minute-booking",
+    "https://www.commbank.com.au/",
+    "https://www.acypartners.com/",
+    "https://zerologix.com/",
+    "https://www.hotelnetwork.com.au/",
+    "https://zova.com/",
+    "https://nailib.com/",
+    "https://examplit.com/",
+    "https://vlon.ai/"
+  ],
+  "textPreview": "Turnix | Replace Your Teams with AI Agents We Help Businesses Integrate A.I. Book a Free 30-Min Strategy Call We do not just build software—we build the future of work. At Turnix, we are a battle-tested product team that&#x27;s helped launch some of the world&#x27;s most-loved edtech and productivity tools. In 2025, we&#x27;re going bigger—creating our own AI-first products and helping businesses embed intelligent automation into their DNA. From content creation and customer support to internal ",
+  "stats": {
+    "htmlSize": "43959 bytes",
+    "totalScripts": 11,
+    "totalImages": 17,
+    "totalCSS": 1
+  }
+}

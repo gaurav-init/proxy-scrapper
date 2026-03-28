@@ -10,28 +10,39 @@ const COLLECTION_NAME = "free-proxy";
 const ONE_HOUR_MS = 60 * 60 * 1000;
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN || "";
 
-const PROXY_REGEX = /^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}):(\d{1,5})$/;
+const PLAIN_REGEX = /^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}):(\d{1,5})$/;
+const AUTH_AT_REGEX = /^(.+):(.+)@(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}):(\d{1,5})$/;
+const AUTH_COLON_REGEX = /^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}):(\d{1,5}):(.+):(.+)$/;
 
 function parseProxies(text) {
   const proxies = [];
   for (const line of text.split("\n")) {
     const trimmed = line.trim();
-    if (PROXY_REGEX.test(trimmed)) {
+    if (!trimmed) continue;
+
+    let m = trimmed.match(AUTH_AT_REGEX);
+    if (m) {
+      proxies.push({ ip: m[3], port: parseInt(m[4], 10), user: m[1], pass: m[2] });
+      continue;
+    }
+
+    m = trimmed.match(AUTH_COLON_REGEX);
+    if (m) {
+      proxies.push({ ip: m[1], port: parseInt(m[2], 10), user: m[3], pass: m[4] });
+      continue;
+    }
+
+    if (PLAIN_REGEX.test(trimmed)) {
       const idx = trimmed.indexOf(":");
-      proxies.push({
-        ip: trimmed.slice(0, idx),
-        port: parseInt(trimmed.slice(idx + 1), 10),
-      });
+      proxies.push({ ip: trimmed.slice(0, idx), port: parseInt(trimmed.slice(idx + 1), 10), user: "", pass: "" });
     }
   }
   return proxies;
 }
 
-// Cache commit times per repo (not per file) to minimize API calls
 const commitCache = new Map();
 
 async function getLastCommitTime(source) {
-  // Cache by repo (all files in same repo share the same commit freshness)
   const cacheKey = source.repo;
   if (commitCache.has(cacheKey)) return commitCache.get(cacheKey);
 
@@ -46,7 +57,6 @@ async function getLastCommitTime(source) {
       return commitDate;
     }
   } catch (err) {
-    // On rate limit, don't retry
     if (err.response && err.response.status === 403) {
       console.error(`  [GitHub API] Rate limited — skipping commit checks`);
       commitCache.set(cacheKey, null);
@@ -78,6 +88,8 @@ async function fetchSource(source) {
     return proxies.map((p) => ({
       ip: p.ip,
       port: p.port,
+      user: p.user || "",
+      pass: p.pass || "",
       type: source.type,
       source: source.name,
       lastCommit,
@@ -97,7 +109,6 @@ async function scrape() {
 
   commitCache.clear();
 
-  // Fetch sources in batches of 10
   const allProxies = [];
   for (let i = 0; i < PROXY_SOURCES.length; i += 10) {
     const batch = PROXY_SOURCES.slice(i, i + 10);
@@ -109,7 +120,6 @@ async function scrape() {
     }
   }
 
-  // Deduplicate by unique IP — prefer active over inactive
   const ipMap = new Map();
   for (const proxy of allProxies) {
     const existing = ipMap.get(proxy.ip);
@@ -119,7 +129,6 @@ async function scrape() {
   }
   const unique = Array.from(ipMap.values());
 
-  // Counts
   const counts = {};
   const statusCounts = { active: 0, inactive: 0 };
   for (const p of unique) {
@@ -131,7 +140,6 @@ async function scrape() {
   console.log("By category:", counts);
   console.log("By status:", statusCounts);
 
-  // Store in MongoDB
   const client = new MongoClient(MONGO_URI);
   try {
     await client.connect();
@@ -143,10 +151,10 @@ async function scrape() {
     await collection.createIndex({ status: 1 });
     await collection.createIndex({ scrapedAt: 1 });
     await collection.createIndex({ country: 1 });
+    await collection.createIndex({ validated: 1 });
 
     const now = new Date();
 
-    // Upsert in batches of 500
     let inserted = 0;
     let updated = 0;
     for (let i = 0; i < unique.length; i += 500) {
@@ -167,8 +175,18 @@ async function scrape() {
                 status: proxy.status,
                 country: geo ? geo.country : "??",
                 city: geo ? geo.city : "",
+                user: proxy.user || "",
+                pass: proxy.pass || "",
+                hasAuth: !!(proxy.user && proxy.pass),
               },
-              $setOnInsert: { firstSeen: now, openPorts: [], smtpPorts: [], httpPorts: [] },
+              $setOnInsert: {
+                firstSeen: now,
+                openPorts: [],
+                smtpPorts: [],
+                httpPorts: [],
+                validated: false,
+                validatedAt: null,
+              },
             },
             upsert: true,
           },
@@ -179,7 +197,6 @@ async function scrape() {
       updated += result.modifiedCount || 0;
     }
 
-    // Old proxies not in this scrape → inactive, clear port data
     await collection.updateMany(
       { scrapedAt: { $lt: now } },
       { $set: { status: "inactive", openPorts: [], smtpPorts: [], httpPorts: [] }, $unset: { portScannedAt: "" } }
@@ -202,8 +219,14 @@ async function scrape() {
 module.exports = scrape;
 
 if (require.main === module) {
-  scrape().catch((err) => {
-    console.error("Scrape failed:", err);
-    process.exit(1);
-  });
+  const validate = require("./validate");
+  scrape()
+    .then(() => {
+      console.log("Scrape done, starting validation...\n");
+      return validate();
+    })
+    .catch((err) => {
+      console.error("Failed:", err);
+      process.exit(1);
+    });
 }

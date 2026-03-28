@@ -12,6 +12,11 @@ export async function GET(req: NextRequest) {
     if (searchParams.get("status")) filter.status = searchParams.get("status")!;
     if (searchParams.get("type")) filter.type = searchParams.get("type")!;
     if (searchParams.get("country")) filter.country = searchParams.get("country")!;
+    if (searchParams.get("auth") === "true") filter.hasAuth = true;
+    if (searchParams.get("auth") === "false") filter.hasAuth = { $ne: true };
+    if (searchParams.get("validated") === "true") filter.validated = true;
+    if (searchParams.get("validated") === "false") filter.validated = { $ne: true };
+    if (searchParams.get("source")) filter.source = searchParams.get("source")!;
 
     // Port filters: smtp, http, or specific port number
     const portFilter = searchParams.get("port");

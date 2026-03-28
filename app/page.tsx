@@ -15,10 +15,19 @@ interface Proxy {
   httpPorts?: number[];
   country?: string;
   city?: string;
+  user?: string;
+  pass?: string;
+  hasAuth?: boolean;
+  validated?: boolean;
 }
 
 interface CountryEntry {
   code: string;
+  count: number;
+}
+
+interface SourceEntry {
+  name: string;
   count: number;
 }
 
@@ -32,6 +41,7 @@ interface Stats {
     http: { 80: number; 443: number; any: number };
   };
   byCountry?: CountryEntry[];
+  bySource?: SourceEntry[];
 }
 
 function timeAgo(dateStr: string | null) {
@@ -72,6 +82,9 @@ export default function Dashboard() {
   const [currentStatus, setCurrentStatus] = useState("active");
   const [currentPort, setCurrentPort] = useState("");
   const [currentCountry, setCurrentCountry] = useState("");
+  const [currentAuth, setCurrentAuth] = useState("");
+  const [currentSource, setCurrentSource] = useState("");
+  const [currentValidated, setCurrentValidated] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -93,6 +106,9 @@ export default function Dashboard() {
     if (currentStatus) params.set("status", currentStatus);
     if (currentPort) params.set("port", currentPort);
     if (currentCountry) params.set("country", currentCountry);
+    if (currentAuth) params.set("auth", currentAuth);
+    if (currentValidated) params.set("validated", currentValidated);
+    if (currentSource) params.set("source", currentSource);
 
     try {
       const res = await fetch("/api/proxies?" + params);
@@ -105,7 +121,7 @@ export default function Dashboard() {
     } finally {
       setLoading(false);
     }
-  }, [currentPage, currentType, currentStatus, currentPort, currentCountry]);
+  }, [currentPage, currentType, currentStatus, currentPort, currentCountry, currentAuth, currentValidated, currentSource]);
 
   useEffect(() => { loadStats(); }, [loadStats]);
   useEffect(() => { loadProxies(); }, [loadProxies]);
@@ -118,6 +134,9 @@ export default function Dashboard() {
   function handleStatus(v: string) { setCurrentStatus(v); setCurrentPage(1); }
   function handlePort(v: string) { setCurrentPort(v); setCurrentPage(1); }
   function handleCountry(v: string) { setCurrentCountry(v); setCurrentPage(1); }
+  function handleAuth(v: string) { setCurrentAuth(v); setCurrentPage(1); }
+  function handleValidated(v: string) { setCurrentValidated(v); setCurrentPage(1); }
+  function handleSource(v: string) { setCurrentSource(v); setCurrentPage(1); }
 
   function copyProxy(ip: string, port: number, id: string) {
     navigator.clipboard.writeText(ip + ":" + port);
@@ -265,6 +284,22 @@ export default function Dashboard() {
             </button>
           ))}
 
+          {/* Validated Filter */}
+          <div className="status-toggle">
+            <button
+              className={`status-btn active-btn ${currentValidated === "true" ? "selected" : ""}`}
+              onClick={() => handleValidated(currentValidated === "true" ? "" : "true")}
+            >
+              Verified
+            </button>
+            <button
+              className={`status-btn inactive-btn ${currentValidated === "false" ? "selected" : ""}`}
+              onClick={() => handleValidated(currentValidated === "false" ? "" : "false")}
+            >
+              Unverified
+            </button>
+          </div>
+
           {/* Country Dropdown */}
           <select
             className="country-select"
@@ -275,6 +310,20 @@ export default function Dashboard() {
             {stats?.byCountry?.map((c) => (
               <option key={c.code} value={c.code}>
                 {flag(c.code)} {c.code} ({c.count.toLocaleString()})
+              </option>
+            ))}
+          </select>
+
+          {/* Source Dropdown */}
+          <select
+            className="country-select"
+            value={currentSource}
+            onChange={(e) => handleSource(e.target.value)}
+          >
+            <option value="">All Sources</option>
+            {stats?.bySource?.map((s) => (
+              <option key={s.name} value={s.name}>
+                {s.name} ({s.count.toLocaleString()})
               </option>
             ))}
           </select>
@@ -292,6 +341,7 @@ export default function Dashboard() {
                 <th>Country</th>
                 <th>SMTP Ports</th>
                 <th>HTTP Ports</th>
+                <th>Verified</th>
                 <th>Status</th>
                 <th>Source</th>
                 <th>Last Commit</th>
@@ -300,9 +350,9 @@ export default function Dashboard() {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={11} className="loading">Loading proxies...</td></tr>
+                <tr><td colSpan={12} className="loading">Loading proxies...</td></tr>
               ) : proxies.length === 0 ? (
-                <tr><td colSpan={11} className="loading">No proxies found</td></tr>
+                <tr><td colSpan={12} className="loading">No proxies found</td></tr>
               ) : (
                 proxies.map((p, i) => (
                   <tr key={p._id}>
@@ -332,6 +382,11 @@ export default function Dashboard() {
                       ) : (
                         <span style={{ color: "#484f58" }}>-</span>
                       )}
+                    </td>
+                    <td>
+                      <span className={`badge ${p.validated ? "verified" : "unverified"}`}>
+                        {p.validated ? "Working" : "Unverified"}
+                      </span>
                     </td>
                     <td><span className={`badge ${p.status}`}>{p.status}</span></td>
                     <td className="source-link">{p.source}</td>

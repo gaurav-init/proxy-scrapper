@@ -123,6 +123,8 @@ tr:last-child td { border-bottom: none; }
 }
 .badge.active { background: #0d3321; color: #3fb950; }
 .badge.inactive { background: #3d1214; color: #f85149; }
+.badge.verified { background: #0d3321; color: #3fb950; }
+.badge.unverified { background: #2a2000; color: #d29922; }
 
 .badge-type {
   display: inline-block;
