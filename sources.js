@@ -12,6 +12,8 @@ const PROXY_SOURCES = [
   // ===== clarketm =====
   { name: "clarketm", type: "http", url: "https://raw.githubusercontent.com/clarketm/proxy-list/master/proxy-list-raw.txt", repo: "clarketm/proxy-list", path: "proxy-list-raw.txt" },
 
+
+  // ===== proxy-list.download =====
   // ===== ShiftyTR =====
   { name: "ShiftyTR", type: "http", url: "https://raw.githubusercontent.com/shiftytr/proxy-list/master/proxy.txt", repo: "ShiftyTR/Proxy-List", path: "proxy.txt" },
 
