@@ -4,18 +4,4 @@
   "outputDirectory": ".next",
   "installCommand": "npm install",
   "ignoreCommand": "",
-  "crons": [
-    {
-      "path": "/api/cron/scrape",
-      "schedule": "0 * * * *"
-    },
-    {
-      "path": "/api/cron/port-scan",
-      "schedule": "20 * * * *"
-    },
-    {
-      "path": "/api/cron/validate",
-      "schedule": "40 * * * *"
-    }
-  ]
 }
