@@ -5,7 +5,7 @@ export const maxDuration = 300;
 
 export async function GET() {
   try {
-    const validate = require("../../../../../validate.js");
+    const validate = require(require("path").join(process.cwd(), "validate.js"));
     await validate();
     return NextResponse.json({ ok: true, ran: "validate", at: new Date().toISOString() });
   } catch (err: any) {

@@ -1,11 +1,15 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Scraper files are not part of the Next.js app
   typescript: {
     ignoreBuildErrors: false,
   },
-  serverExternalPackages: ["mongodb"],
+  serverExternalPackages: ["mongodb", "geoip-lite", "socks-proxy-agent", "http-proxy-agent", "https-proxy-agent"],
+  outputFileTracingIncludes: {
+    "/api/cron/scrape": ["./scrape.js", "./sources.js"],
+    "/api/cron/port-scan": ["./port-scan.js"],
+    "/api/cron/validate": ["./validate.js"],
+  },
 };
 
 export default nextConfig;

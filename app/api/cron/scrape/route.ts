@@ -5,7 +5,7 @@ export const maxDuration = 300;
 
 export async function GET() {
   try {
-    const scrape = require("../../../../../scrape.js");
+    const scrape = require(require("path").join(process.cwd(), "scrape.js"));
     await scrape();
     return NextResponse.json({ ok: true, ran: "scrape", at: new Date().toISOString() });
   } catch (err: any) {
